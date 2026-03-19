@@ -44,6 +44,11 @@ export interface PaymentUrlResponse {
   url: string;
 }
 
+export interface NegotiationPhaseParams {
+  accept: boolean;
+  content?: string;
+}
+
 export async function createJobOffering(
   offering: JobOfferingData
 ): Promise<{ success: boolean; data?: AgentData }> {
@@ -59,13 +64,9 @@ export async function createJobOffering(
   }
 }
 
-export async function deleteJobOffering(
-  offeringName: string
-): Promise<{ success: boolean }> {
+export async function deleteJobOffering(offeringName: string): Promise<{ success: boolean }> {
   try {
-    await client.delete(
-      `/acp/job-offerings/${encodeURIComponent(offeringName)}`
-    );
+    await client.delete(`/acp/job-offerings/${encodeURIComponent(offeringName)}`);
     return { success: true };
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -89,9 +90,7 @@ export async function upsertResourceApi(
   }
 }
 
-export async function deleteResourceApi(
-  resourceName: string
-): Promise<{ success: boolean }> {
+export async function deleteResourceApi(resourceName: string): Promise<{ success: boolean }> {
   try {
     await client.delete(`/acp/resources/${encodeURIComponent(resourceName)}`);
     return { success: true };
@@ -106,7 +105,10 @@ export async function createSubscription(tier: {
   name: string;
   price: number;
   duration: number;
-}): Promise<{ success: boolean; data?: { id: number; name: string; price: number; duration: number } }> {
+}): Promise<{
+  success: boolean;
+  data?: { id: number; name: string; price: number; duration: number };
+}> {
   try {
     const { data } = await client.post(`/acp/subscriptions`, tier);
     return { success: true, data: data.data };
@@ -119,13 +121,13 @@ export async function createSubscription(tier: {
 
 export async function updateSubscription(
   name: string,
-  updates: { price?: number; duration?: number },
-): Promise<{ success: boolean; data?: { id: number; name: string; price: number; duration: number } }> {
+  updates: { price?: number; duration?: number }
+): Promise<{
+  success: boolean;
+  data?: { id: number; name: string; price: number; duration: number };
+}> {
   try {
-    const { data } = await client.put(
-      `/acp/subscriptions/${encodeURIComponent(name)}`,
-      updates,
-    );
+    const { data } = await client.put(`/acp/subscriptions/${encodeURIComponent(name)}`, updates);
     return { success: true, data: data.data };
   } catch (error: any) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -134,9 +136,7 @@ export async function updateSubscription(
   }
 }
 
-export async function deleteSubscription(
-  name: string
-): Promise<{ success: boolean }> {
+export async function deleteSubscription(name: string): Promise<{ success: boolean }> {
   try {
     await client.delete(`/acp/subscriptions/${encodeURIComponent(name)}`);
     return { success: true };
@@ -152,13 +152,18 @@ export async function getPaymentUrl(): Promise<{
   url?: string;
 }> {
   try {
-    const { data } = await client.get<{ data: PaymentUrlResponse }>(
-      "/acp/topup"
-    );
+    const { data } = await client.get<{ data: PaymentUrlResponse }>("/acp/topup");
     return { success: true, url: data.data.url };
   } catch (error: any) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error(`ACP getPaymentUrl failed: ${msg}`);
     return { success: false };
   }
+}
+
+export async function processNegotiationPhase(
+  jobId: number,
+  params: NegotiationPhaseParams
+): Promise<void> {
+  return await client.post(`/acp/providers/jobs/${jobId}/negotiation`, params);
 }

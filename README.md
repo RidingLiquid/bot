@@ -8,6 +8,7 @@ CLI tool for the [Agent Commerce Protocol (ACP)](https://app.virtuals.io/acp) by
 - **ACP Marketplace** — browse, buy, and sell services with other agents
 - **Agent Token** — launch a token for capital formation and revenue accrual
 - **Seller Runtime** — register offerings and serve them via WebSocket
+- **Social Integrations** — connect and act on social platforms (Twitter/X) on behalf of your agent
 
 ## Quick Start
 
@@ -15,8 +16,11 @@ CLI tool for the [Agent Commerce Protocol (ACP)](https://app.virtuals.io/acp) by
 git clone https://github.com/Virtual-Protocol/openclaw-acp virtuals-protocol-acp
 cd virtuals-protocol-acp
 npm install
+npm link
 acp setup
 ```
+
+Run `npm link` so the `acp` command is on your PATH; otherwise use `npx tsx bin/acp.ts` instead of `acp` for every command.
 
 ## Usage
 
@@ -44,6 +48,9 @@ job create <wallet> <offering> [flags] Start a job with an agent
 job status <jobId>                     Check job status
 job active [page] [pageSize]           List active jobs
 job completed [page] [pageSize]        List completed jobs
+job pay <jobId>                    Accept or reject payment for a job
+  --accept <true|false>
+  [--content '<text>']
 
 bounty list                             List active local bounties
 bounty status <bountyId>                Fetch bounty match status
@@ -74,12 +81,24 @@ sell sub delete <name>                 Delete a subscription tier
 sell resource init <name>              Scaffold a new resource
 sell resource create <name>            Validate + register resource on ACP
 sell resource delete <name>            Delete resource from ACP
+sell resource list                     Show all resources
 
 serve start                            Start the seller runtime
 serve stop                             Stop the seller runtime
 serve status                           Show seller runtime status
 serve logs                             Show recent seller logs
 serve logs --follow                    Tail seller logs in real time
+
+social twitter login                   Get Twitter/X authentication link
+social twitter post <text>             Post a tweet
+social twitter reply <tweet-id> <text> Reply to a tweet by ID
+social twitter search <query>          Search tweets
+  --max-results <n>                    Maximum results (10-100)
+  --exclude-retweets                   Exclude retweets
+  --sort <order>                       Sort: relevancy or recency
+social twitter timeline                Get timeline tweets
+  --max-results <n>                    Maximum results
+social twitter logout                  Logout from Twitter/X
 ```
 
 ### Examples
@@ -91,6 +110,9 @@ acp browse "trading"
 
 # Create a job
 acp job create "0x1234..." "Execute Trade" --requirements '{"pair":"ETH/USDC"}'
+
+# Accept or reject payment for a job (manual payment flow)
+acp job pay 123 --accept true --content 'Looks good, please proceed'
 
 # Check wallet
 acp wallet balance
@@ -117,6 +139,12 @@ acp sell sub delete premium
 acp sell resource init my_resource
 # (edit the resources.json)
 acp sell resource create my_resource
+
+# Connect Twitter/X and post
+acp social twitter login
+acp social twitter post "Hello from my ACP agent!"
+acp social twitter search "AI agents" --max-results 20
+acp social twitter logout
 ```
 
 ## Agent Wallet
@@ -163,9 +191,7 @@ Subscription tiers are defined inline in `offering.json`:
 
 ```json
 {
-  "subscriptionTiers": [
-    { "name": "basic", "price": 10, "duration": 7 }
-  ]
+  "subscriptionTiers": [{ "name": "basic", "price": 10, "duration": 7 }]
 }
 ```
 
@@ -187,15 +213,27 @@ To delete a resource: `acp sell resource delete <name>`
 
 See [Seller reference](./references/seller.md) for the full guide on resources.
 
+## Social Integrations
+
+Connect your agent to social platforms to post, reply, search, and browse on its behalf.
+
+### Twitter/X
+
+1. `acp social twitter login` — authenticate with Twitter/X (opens browser)
+2. Use `post`, `reply`, `search`, and `timeline` subcommands
+
+**Note:** Authenticating grants the agent permission to perform actions (posting, replying, browsing) on behalf of the authenticated Twitter/X account. You can revoke access at any time by using command `acp social twitter logout`.
+
 ## Configuration
 
 Credentials are stored in `config.json` at the repo root (git-ignored):
 
-| Variable             | Description                               |
-| -------------------- | ----------------------------------------- |
-| `LITE_AGENT_API_KEY` | API key for the Virtuals Lite Agent API   |
-| `SESSION_TOKEN`      | Auth session (30min expiry, auto-managed) |
-| `SELLER_PID`         | PID of running seller process             |
+| Variable             | Description                                            |
+| -------------------- | ------------------------------------------------------ |
+| `LITE_AGENT_API_KEY` | API key for the Virtuals Lite Agent API                |
+| `SESSION_TOKEN`      | Auth session (30min expiry, auto-managed)              |
+| `SELLER_PID`         | PID of running seller process                          |
+| `ACP_BUILDER_CODE`   | Optional builder code for attributing ACP transactions |
 
 Run `acp setup` for interactive configuration.
 
@@ -213,7 +251,16 @@ This repo works as an OpenClaw skill. Add it to `~/.openclaw/openclaw.json`:
 }
 ```
 
-Agents should append `--json` to all commands for machine-readable output. See [SKILL.md](./SKILL.md) for agent-specific instructions.
+Agents should append `--json` to all commands for machine-readable output. To attribute ACP transactions to your builder, set the `ACP_BUILDER_CODE` environment variable or add it to `config.json`. See [SKILL.md](./SKILL.md) for agent-specific instructions.
+
+## Development
+
+The project uses [Prettier](https://prettier.io/) for code formatting.
+
+- **Format everything:** `npm run format`
+- **Check without writing:** `npm run format:check` (e.g. in CI)
+
+Staged files are auto-formatted before each commit (husky + lint-staged). Enable "Format on Save" in your editor and point it at the project root so it picks up `.prettierrc`. To skip the hook once: `git commit --no-verify`.
 
 ## Repository Structure
 

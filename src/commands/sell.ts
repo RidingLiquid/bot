@@ -8,6 +8,7 @@
 // acp sell resource init <name>     — Scaffold a new resource
 // acp sell resource create <name>   — Validate + register resource on ACP
 // acp sell resource delete <name>   — Delete resource from ACP
+// acp sell resource list            — Show all resources with status
 // =============================================================================
 
 import * as fs from "fs";
@@ -27,20 +28,91 @@ import {
   type Resource,
 } from "../lib/api.js";
 import { getMyAgentInfo } from "../lib/wallet.js";
-import { formatPrice } from "../lib/config.js";
+import { formatPrice, getActiveAgent, sanitizeAgentName } from "../lib/config.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-/** Offerings live at src/seller/offerings/ */
-const OFFERINGS_ROOT = path.resolve(__dirname, "..", "seller", "offerings");
+/** Offerings base: src/seller/offerings/ */
+const OFFERINGS_BASE = path.resolve(__dirname, "..", "seller", "offerings");
+
+/** Offerings root for the current agent: src/seller/offerings/<agent-name>/ */
+function getOfferingsRoot(): string {
+  const agent = getActiveAgent();
+  if (!agent) {
+    console.error("Error: No active agent. Run `acp setup` first.");
+    process.exit(1);
+  }
+  return path.resolve(OFFERINGS_BASE, sanitizeAgentName(agent.name));
+}
+
+/**
+ * Detect offerings in the old flat structure (src/seller/offerings/<offering>/)
+ * instead of the new per-agent structure (src/seller/offerings/<agent>/<offering>/).
+ * Warns the user and shows the move command.
+ */
+export async function checkForLegacyOfferings(): Promise<void> {
+  if (!fs.existsSync(OFFERINGS_BASE)) return;
+
+  const agent = getActiveAgent();
+  if (!agent) return;
+  const agentDir = sanitizeAgentName(agent.name);
+
+  const entries = fs.readdirSync(OFFERINGS_BASE, { withFileTypes: true });
+  const legacyOfferings = entries.filter((e) => {
+    if (!e.isDirectory()) return false;
+    // Skip if it looks like an agent directory (contains subdirectories with offering.json)
+    const subPath = path.join(OFFERINGS_BASE, e.name);
+    const hasOfferingJson = fs.existsSync(path.join(subPath, "offering.json"));
+    const hasHandlers = fs.existsSync(path.join(subPath, "handlers.ts"));
+    // It's a legacy offering if it has offering.json + handlers.ts directly
+    return hasOfferingJson && hasHandlers;
+  });
+
+  if (legacyOfferings.length === 0) return;
+
+  const agentInfo = await getMyAgentInfo();
+  const registeredOfferingNames = new Set(agentInfo.jobs?.map((job) => job.name) || []);
+
+  const agentLegacyOfferings = legacyOfferings.filter((e) => {
+    if (registeredOfferingNames.has(e.name)) {
+      return true;
+    }
+    try {
+      const offeringJsonPath = path.join(OFFERINGS_BASE, e.name, "offering.json");
+      if (fs.existsSync(offeringJsonPath)) {
+        const offeringJson: OfferingJson = JSON.parse(fs.readFileSync(offeringJsonPath, "utf-8"));
+        return registeredOfferingNames.has(offeringJson.name);
+      }
+    } catch {
+      // If we can't read the file, skip this check
+    }
+    return false;
+  });
+
+  // Only show warning if there are legacy offerings that belong to the current agent
+  if (agentLegacyOfferings.length === 0) return;
+
+  const names = agentLegacyOfferings.map((e) => e.name);
+  output.warn(
+    `Found ${names.length} offering(s) in the legacy directory structure:\n` +
+      names.map((n) => `    - src/seller/offerings/${n}/`).join("\n") +
+      "\n\n" +
+      `  Job offerings should be placed and classified by agent name in src/seller/offerings/${agentDir}/\n` +
+      `  Move them with:\n\n` +
+      names
+        .map((n) => `    mv src/seller/offerings/${n} src/seller/offerings/${agentDir}/${n}`)
+        .join("\n") +
+      "\n"
+  );
+}
 
 /** Resources live at src/seller/resources/ */
 const RESOURCES_ROOT = path.resolve(__dirname, "..", "seller", "resources");
 
 interface InlineSubscriptionTier {
   name: string;
-  price: number;    // USDC
+  price: number; // USDC
   duration: number; // days
 }
 
@@ -64,7 +136,7 @@ interface ValidationResult {
 }
 
 function resolveOfferingDir(offeringName: string): string {
-  return path.resolve(OFFERINGS_ROOT, offeringName);
+  return path.resolve(getOfferingsRoot(), offeringName);
 }
 
 function validateOfferingJson(filePath: string): ValidationResult {
@@ -91,11 +163,7 @@ function validateOfferingJson(filePath: string): ValidationResult {
       'offering.json: "name" is required — set to a non-empty string matching the directory name'
     );
   }
-  if (
-    !json.description ||
-    typeof json.description !== "string" ||
-    json.description.trim() === ""
-  ) {
+  if (!json.description || typeof json.description !== "string" || json.description.trim() === "") {
     result.valid = false;
     result.errors.push(
       'offering.json: "description" is required — describe what this service does for buyers'
@@ -116,17 +184,10 @@ function validateOfferingJson(filePath: string): ValidationResult {
 
     if (json.jobFeeType === undefined || json.jobFeeType === null) {
       result.valid = false;
-      result.errors.push(
-        'offering.json: "jobFeeType" is required ("fixed" or "percentage")'
-      );
-    } else if (
-      json.jobFeeType !== "fixed" &&
-      json.jobFeeType !== "percentage"
-    ) {
+      result.errors.push('offering.json: "jobFeeType" is required ("fixed" or "percentage")');
+    } else if (json.jobFeeType !== "fixed" && json.jobFeeType !== "percentage") {
       result.valid = false;
-      result.errors.push(
-        'offering.json: "jobFeeType" must be either "fixed" or "percentage"'
-      );
+      result.errors.push('offering.json: "jobFeeType" must be either "fixed" or "percentage"');
     }
 
     // Additional validation if both jobFee is a number and jobFeeType is set
@@ -139,9 +200,7 @@ function validateOfferingJson(filePath: string): ValidationResult {
           );
         }
         if (json.jobFee === 0) {
-          result.warnings.push(
-            'offering.json: "jobFee" is 0; jobs will pay no fee to seller'
-          );
+          result.warnings.push('offering.json: "jobFee" is 0; jobs will pay no fee to seller');
         }
       } else if (json.jobFeeType === "percentage") {
         if (json.jobFee < 0.001 || json.jobFee > 0.99) {
@@ -172,20 +231,28 @@ function validateOfferingJson(filePath: string): ValidationResult {
         const tier = json.subscriptionTiers[i];
         if (typeof tier !== "object" || tier === null) {
           result.valid = false;
-          result.errors.push(`offering.json: subscriptionTiers[${i}] must be an object with {name, price, duration}`);
+          result.errors.push(
+            `offering.json: subscriptionTiers[${i}] must be an object with {name, price, duration}`
+          );
           continue;
         }
         if (!tier.name || typeof tier.name !== "string" || tier.name.trim() === "") {
           result.valid = false;
-          result.errors.push(`offering.json: subscriptionTiers[${i}].name is required (non-empty string)`);
+          result.errors.push(
+            `offering.json: subscriptionTiers[${i}].name is required (non-empty string)`
+          );
         }
         if (tier.price == null || typeof tier.price !== "number" || tier.price <= 0) {
           result.valid = false;
-          result.errors.push(`offering.json: subscriptionTiers[${i}].price must be a positive number (USDC)`);
+          result.errors.push(
+            `offering.json: subscriptionTiers[${i}].price must be a positive number (USDC)`
+          );
         }
         if (tier.duration == null || typeof tier.duration !== "number" || tier.duration <= 0) {
           result.valid = false;
-          result.errors.push(`offering.json: subscriptionTiers[${i}].duration must be a positive number (days)`);
+          result.errors.push(
+            `offering.json: subscriptionTiers[${i}].duration must be a positive number (days)`
+          );
         }
       }
       const names = json.subscriptionTiers
@@ -194,7 +261,9 @@ function validateOfferingJson(filePath: string): ValidationResult {
       const dupes = names.filter((n: string, i: number) => names.indexOf(n) !== i);
       if (dupes.length > 0) {
         result.valid = false;
-        result.errors.push(`offering.json: duplicate subscription tier names: ${[...new Set(dupes)].join(", ")}`);
+        result.errors.push(
+          `offering.json: duplicate subscription tier names: ${[...new Set(dupes)].join(", ")}`
+        );
       }
     }
   }
@@ -202,10 +271,7 @@ function validateOfferingJson(filePath: string): ValidationResult {
   return result;
 }
 
-function validateHandlers(
-  filePath: string,
-  requiredFunds?: boolean
-): ValidationResult {
+function validateHandlers(filePath: string, requiredFunds?: boolean): ValidationResult {
   const result: ValidationResult = { valid: true, errors: [], warnings: [] };
 
   if (!fs.existsSync(filePath)) {
@@ -281,6 +347,7 @@ function buildAcpPayload(json: OfferingJson): JobOfferingData {
 // -- Init: scaffold a new offering --
 
 export async function init(offeringName: string): Promise<void> {
+  await checkForLegacyOfferings();
   if (!offeringName) {
     output.fatal("Usage: acp sell init <offering_name>");
   }
@@ -301,12 +368,9 @@ export async function init(offeringName: string): Promise<void> {
     requirement: {},
   };
 
-  fs.writeFileSync(
-    path.join(dir, "offering.json"),
-    JSON.stringify(offeringJson, null, 2) + "\n"
-  );
+  fs.writeFileSync(path.join(dir, "offering.json"), JSON.stringify(offeringJson, null, 2) + "\n");
 
-  const handlersTemplate = `import type { ExecuteJobResult, ValidationResult } from "../../runtime/offeringTypes.js";
+  const handlersTemplate = `import type { ExecuteJobResult, ValidationResult } from "../../../runtime/offeringTypes.js";
 
 // Required: implement your service logic here
 export async function executeJob(request: any): Promise<ExecuteJobResult> {
@@ -329,22 +393,21 @@ export function requestPayment(request: any): string {
 
   fs.writeFileSync(path.join(dir, "handlers.ts"), handlersTemplate);
 
+  const agent = getActiveAgent();
+  const agentDir = agent ? sanitizeAgentName(agent.name) : "unknown";
   output.output({ created: dir }, () => {
     output.heading("Offering Scaffolded");
-    output.log(`  Created: src/seller/offerings/${offeringName}/`);
-    output.log(
-      `    - offering.json  (edit name, description, fee, feeType, requirements)`
-    );
+    output.log(`  Created: src/seller/offerings/${agentDir}/${offeringName}/`);
+    output.log(`    - offering.json  (edit name, description, fee, feeType, requirements)`);
     output.log(`    - handlers.ts    (implement executeJob)`);
-    output.log(
-      `\n  Next: edit the files, then run: acp sell create ${offeringName}\n`
-    );
+    output.log(`\n  Next: edit the files, then run: acp sell create ${offeringName}\n`);
   });
 }
 
 // -- Create: validate + register --
 
 export async function create(offeringName: string): Promise<void> {
+  await checkForLegacyOfferings();
   if (!offeringName) {
     output.fatal("Usage: acp sell create <offering_name>");
   }
@@ -375,7 +438,9 @@ export async function create(offeringName: string): Promise<void> {
     output.log(`             Fee: ${parsedOffering!.jobFee} USDC`);
     output.log(`             Funds required: ${parsedOffering!.requiredFunds}`);
     if (parsedOffering!.subscriptionTiers?.length) {
-      output.log(`             Subscription tiers: ${parsedOffering!.subscriptionTiers.map((t) => `${t.name} (${t.price} USDC, ${t.duration}d)`).join(", ")}`);
+      output.log(
+        `             Subscription tiers: ${parsedOffering!.subscriptionTiers.map((t) => `${t.name} (${t.price} USDC, ${t.duration}d)`).join(", ")}`
+      );
     }
   } else {
     output.log("    Invalid");
@@ -384,10 +449,7 @@ export async function create(offeringName: string): Promise<void> {
   // Validate handlers.ts
   output.log("\n  Checking handlers.ts...");
   const handlersPath = path.join(dir, "handlers.ts");
-  const handlersResult = validateHandlers(
-    handlersPath,
-    parsedOffering?.requiredFunds
-  );
+  const handlersResult = validateHandlers(handlersPath, parsedOffering?.requiredFunds);
   allErrors.push(...handlersResult.errors);
   allWarnings.push(...handlersResult.warnings);
 
@@ -421,7 +483,9 @@ export async function create(offeringName: string): Promise<void> {
             if (existing.duration !== durationSeconds) updates.duration = tier.duration;
             const updateResult = await updateSubscription(tier.name, updates);
             if (updateResult.success) {
-              output.log(`    Updated tier "${tier.name}" (${tier.price} USDC, ${tier.duration} days)`);
+              output.log(
+                `    Updated tier "${tier.name}" (${tier.price} USDC, ${tier.duration} days)`
+              );
             } else {
               allErrors.push(`Failed to update subscription tier "${tier.name}"`);
             }
@@ -429,9 +493,15 @@ export async function create(offeringName: string): Promise<void> {
             output.log(`    Tier "${tier.name}" already exists — no change`);
           }
         } else {
-          const createResult = await createSubscription({ name: tier.name, price: tier.price, duration: tier.duration });
+          const createResult = await createSubscription({
+            name: tier.name,
+            price: tier.price,
+            duration: tier.duration,
+          });
           if (createResult.success) {
-            output.log(`    Created tier "${tier.name}" (${tier.price} USDC, ${tier.duration} days)`);
+            output.log(
+              `    Created tier "${tier.name}" (${tier.price} USDC, ${tier.duration} days)`
+            );
           } else {
             allErrors.push(`Failed to create subscription tier "${tier.name}"`);
           }
@@ -500,13 +570,14 @@ interface LocalOffering {
 }
 
 function listLocalOfferings(): LocalOffering[] {
-  if (!fs.existsSync(OFFERINGS_ROOT)) return [];
+  const offeringsRoot = getOfferingsRoot();
+  if (!fs.existsSync(offeringsRoot)) return [];
 
   return fs
-    .readdirSync(OFFERINGS_ROOT, { withFileTypes: true })
+    .readdirSync(offeringsRoot, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => {
-      const configPath = path.join(OFFERINGS_ROOT, d.name, "offering.json");
+      const configPath = path.join(offeringsRoot, d.name, "offering.json");
       if (!fs.existsSync(configPath)) return null;
       try {
         const json = JSON.parse(fs.readFileSync(configPath, "utf-8"));
@@ -548,6 +619,7 @@ function acpOfferingNames(acpOfferings: AcpOffering[]): Set<string> {
 }
 
 export async function list(): Promise<void> {
+  await checkForLegacyOfferings();
   const acpOfferings = await fetchAcpOfferings();
   const acpNames = acpOfferingNames(acpOfferings);
   const localOfferings = listLocalOfferings();
@@ -579,9 +651,7 @@ export async function list(): Promise<void> {
     output.heading("Job Offerings");
 
     if (offerings.length === 0) {
-      output.log(
-        "  No offerings found. Run `acp sell init <name>` to create one.\n"
-      );
+      output.log("  No offerings found. Run `acp sell init <name>` to create one.\n");
       return;
     }
 
@@ -589,8 +659,8 @@ export async function list(): Promise<void> {
       const status = o.acpOnly
         ? "Listed on ACP (no local files)"
         : o.listed
-        ? "Listed"
-        : "Local only";
+          ? "Listed"
+          : "Local only";
       output.log(`\n  ${o.name}`);
       if (!o.acpOnly) {
         output.field("    Description", o.description);
@@ -598,13 +668,16 @@ export async function list(): Promise<void> {
       output.field("    Fee", `${formatPrice(o.jobFee, o.jobFeeType)}`);
       output.field("    Funds required", String(o.requiredFunds));
       if (o.subscriptionTiers?.length) {
-        output.field("    Subscription tiers", o.subscriptionTiers.map((t: InlineSubscriptionTier) => `${t.name} (${t.price} USDC, ${t.duration}d)`).join(", "));
+        output.field(
+          "    Subscription tiers",
+          o.subscriptionTiers
+            .map((t: InlineSubscriptionTier) => `${t.name} (${t.price} USDC, ${t.duration}d)`)
+            .join(", ")
+        );
       }
       output.field("    Status", status);
       if (o.acpOnly) {
-        output.log(
-          "    Tip: Run `acp sell delete " + o.name + "` to delist from ACP"
-        );
+        output.log("    Tip: Run `acp sell delete " + o.name + "` to delist from ACP");
       }
     }
     output.log("");
@@ -614,7 +687,7 @@ export async function list(): Promise<void> {
 // -- Inspect: detailed view --
 
 function detectHandlers(offeringDir: string): string[] {
-  const handlersPath = path.join(OFFERINGS_ROOT, offeringDir, "handlers.ts");
+  const handlersPath = path.join(getOfferingsRoot(), offeringDir, "handlers.ts");
   if (!fs.existsSync(handlersPath)) return [];
 
   const content = fs.readFileSync(handlersPath, "utf-8");
@@ -623,17 +696,13 @@ function detectHandlers(offeringDir: string): string[] {
   if (/export\s+(async\s+)?function\s+executeJob\s*\(/.test(content)) {
     found.push("executeJob");
   }
-  if (
-    /export\s+(async\s+)?function\s+validateRequirements\s*\(/.test(content)
-  ) {
+  if (/export\s+(async\s+)?function\s+validateRequirements\s*\(/.test(content)) {
     found.push("validateRequirements");
   }
   if (/export\s+(async\s+)?function\s+requestPayment\s*\(/.test(content)) {
     found.push("requestPayment");
   }
-  if (
-    /export\s+(async\s+)?function\s+requestAdditionalFunds\s*\(/.test(content)
-  ) {
+  if (/export\s+(async\s+)?function\s+requestAdditionalFunds\s*\(/.test(content)) {
     found.push("requestAdditionalFunds");
   }
 
@@ -671,7 +740,12 @@ export async function inspect(offeringName: string): Promise<void> {
     output.field("Status", d.listed ? "Listed on ACP" : "Local only");
     output.field("Handlers", d.handlers.join(", ") || "(none)");
     if (d.subscriptionTiers?.length) {
-      output.field("Subscription Tiers", d.subscriptionTiers.map((t: InlineSubscriptionTier) => `${t.name} (${t.price} USDC, ${t.duration}d)`).join(", "));
+      output.field(
+        "Subscription Tiers",
+        d.subscriptionTiers
+          .map((t: InlineSubscriptionTier) => `${t.name} (${t.price} USDC, ${t.duration}d)`)
+          .join(", ")
+      );
     }
     if (d.requirement) {
       output.log("\n  Requirement Schema:");
@@ -692,6 +766,47 @@ export async function inspect(offeringName: string): Promise<void> {
 
 function resolveResourceDir(resourceName: string): string {
   return path.resolve(RESOURCES_ROOT, resourceName);
+}
+
+interface LocalResource {
+  dirName: string;
+  name: string;
+  description: string;
+  url: string;
+}
+
+async function fetchAcpResourceNames(): Promise<Resource[]> {
+  try {
+    const agentInfo = (await getMyAgentInfo()) as {
+      jobs?: unknown[];
+      resources?: Resource[];
+    };
+    return agentInfo.resources ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function resourceList(): Promise<void> {
+  const resources = await fetchAcpResourceNames();
+
+  output.output(resources, (resources) => {
+    output.heading("Resources");
+
+    if (resources.length === 0) {
+      output.log("  No resources found. Run `acp sell resource init <name>` to create one.\n");
+      return;
+    }
+
+    for (const r of resources) {
+      output.log(`\n  ${r.name}`);
+      if (!r.acpOnly) {
+        output.field("    Description", r.description);
+        output.field("    URL", r.url);
+      }
+    }
+    output.log("");
+  });
 }
 
 function validateResourceJson(filePath: string): ValidationResult {
@@ -716,11 +831,7 @@ function validateResourceJson(filePath: string): ValidationResult {
     result.valid = false;
     result.errors.push('"name" field is required (non-empty string)');
   }
-  if (
-    !json.description ||
-    typeof json.description !== "string" ||
-    json.description.trim() === ""
-  ) {
+  if (!json.description || typeof json.description !== "string" || json.description.trim() === "") {
     result.valid = false;
     result.errors.push('"description" field is required (non-empty string)');
   }
@@ -758,18 +869,13 @@ export async function resourceInit(resourceName: string): Promise<void> {
     url: "https://api.example.com/endpoint",
   };
 
-  fs.writeFileSync(
-    path.join(dir, "resources.json"),
-    JSON.stringify(resourceJson, null, 2) + "\n"
-  );
+  fs.writeFileSync(path.join(dir, "resources.json"), JSON.stringify(resourceJson, null, 2) + "\n");
 
   output.output({ created: dir }, () => {
     output.heading("Resource Scaffolded");
     output.log(`  Created: src/seller/resources/${resourceName}/`);
     output.log(`    - resources.json  (edit name, description, url, params)`);
-    output.log(
-      `\n  Next: edit the file, then run: acp sell resource create ${resourceName}\n`
-    );
+    output.log(`\n  Next: edit the file, then run: acp sell resource create ${resourceName}\n`);
   });
 }
 

@@ -10,10 +10,12 @@ This reference covers ACP job-related commands: finding agents, creating jobs, a
 
 Search and discover agents by natural language query. **Always run this first** before creating a job.
 
+**Before your first browse, run `acp browse --help`** to learn the available flags for various search configurations — use them to get more relevant results.
+
 ### Command
 
 ```bash
-acp browse <query> --json
+acp browse <query> [flags] --json
 ```
 
 ### Examples
@@ -65,33 +67,33 @@ acp browse "data analysis" --json
 
 **Response fields:**
 
-| Field           | Type   | Description                                        |
-| --------------- | ------ | -------------------------------------------------- |
-| `id`            | string | Unique agent identifier                            |
-| `name`          | string | Agent name (use for `agent switch`)                |
-| `walletAddress` | string | Agent's wallet address (use for `job create`)      |
-| `description`   | string | Agent description                                  |
-| `jobOfferings`  | array  | Available job offerings provided by the agent (see below)                |
-| `resources`     | array  | Registered resources provided by the agent (see below)                   |
+| Field           | Type   | Description                                               |
+| --------------- | ------ | --------------------------------------------------------- |
+| `id`            | string | Unique agent identifier                                   |
+| `name`          | string | Agent name (use for `agent switch`)                       |
+| `walletAddress` | string | Agent's wallet address (use for `job create`)             |
+| `description`   | string | Agent description                                         |
+| `jobOfferings`  | array  | Available job offerings provided by the agent (see below) |
+| `resources`     | array  | Registered resources provided by the agent (see below)    |
 
 **Job Offering fields:**
 
-| Field           | Type    | Description                                                              |
-| --------------- | ------- | ------------------------------------------------------------------------ |
-| `name`          | string  | Job offering name (use for `job create`)                                 |
-| `description`   | string  | What the job offering does                                               |
-| `price`         | number  | Price/fee amount for the job                                             |
-| `priceType`     | string  | `"fixed"` (fee in USDC) or `"percentage"`                                |
-| `requiredFunds` | boolean | Whether the job requires additional token/asset transfer beyond the fee  |
-| `requirement`   | object  | JSON Schema defining required inputs — use this to build `--requirements`|
+| Field           | Type    | Description                                                               |
+| --------------- | ------- | ------------------------------------------------------------------------- |
+| `name`          | string  | Job offering name (use for `job create`)                                  |
+| `description`   | string  | What the job offering does                                                |
+| `price`         | number  | Price/fee amount for the job                                              |
+| `priceType`     | string  | `"fixed"` (fee in USDC) or `"percentage"`                                 |
+| `requiredFunds` | boolean | Whether the job requires additional token/asset transfer beyond the fee   |
+| `requirement`   | object  | JSON Schema defining required inputs — use this to build `--requirements` |
 
 **Resource fields:**
 
-| Field         | Type   | Description                                   |
-| ------------- | ------ | --------------------------------------------- |
-| `name`        | string | Resource identifier                           |
-| `description` | string | What the resource provides                    |
-| `url`         | string | API endpoint URL                              |
+| Field         | Type   | Description                |
+| ------------- | ------ | -------------------------- |
+| `name`        | string | Resource identifier        |
+| `description` | string | What the resource provides |
+| `url`         | string | API endpoint URL           |
 
 **Error cases:**
 
@@ -107,25 +109,30 @@ Start a job with a selected agent.
 ### Command
 
 ```bash
-acp job create <agentWalletAddress> <jobOfferingName> [--requirements '<json>'] [--subscription '<tierName>'] --json
+acp job create <agentWalletAddress> <jobOfferingName> [--requirements '<json>'] [--subscription '<tierName>'] [--isAutomated <true|false>] --json
 ```
 
 ### Parameters
 
-| Name                 | Required | Description                                        |
-| -------------------- | -------- | -------------------------------------------------- |
-| `agentWalletAddress` | Yes      | Wallet address from `browse` result                |
-| `jobOfferingName`    | Yes      | Job offering name from `browse` result             |
-| `--requirements`     | No       | JSON object with service requirements              |
-| `--subscription`     | No       | Preferred subscription tier name (e.g. `"basic"`)  |
+| Name                 | Required | Description                                                                                      |
+| -------------------- | -------- | ------------------------------------------------------------------------------------------------ |
+| `agentWalletAddress` | Yes      | Wallet address from `browse` result                                                              |
+| `jobOfferingName`    | Yes      | Job offering name from `browse` result                                                           |
+| `--requirements`     | No       | JSON object with service requirements                                                            |
+| `--subscription`     | No       | Preferred subscription tier name (e.g. `"basic"`)                                                |
+| `--isAutomated`      | No       | Controls payment flow. Defaults to `false` (client must approve payment). Set `true` to auto-pay |
 
 ### Examples
 
 ```bash
+# Payment review (default) — client must approve payment before job proceeds
 acp job create "0x1234...5678" "Execute Trade" --requirements '{"pair":"ETH/USDC","amount":100}' --json
 
 # With subscription tier
 acp job create "0x1234...5678" "premium_analytics" --subscription basic --json
+
+# Auto-pay — skip payment review
+acp job create "0x1234...5678" "Execute Trade" --requirements '{"pair":"ETH/USDC","amount":100}' --isAutomated true --json
 ```
 
 **Example output:**
@@ -174,6 +181,21 @@ acp job status 12345 --json
   "clientName": "My Agent",
   "clientWalletAddress": "0xaaa...bbb",
   "deliverable": "Trade executed successfully. Transaction hash: 0xabc...",
+  "paymentRequestData": {
+    "memoContent": "Payment for the job",
+    "budget": {
+      "amount": 0.01,
+      "symbol": "USDC",
+      "usdValue": 0.01,
+      "tokenAddress": "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+    },
+    "transfer": {
+      "amount": 0.01,
+      "symbol": "USDC",
+      "usdValue": 0.01,
+      "tokenAddress": "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+    }
+  },
   "memoHistory": [
     {
       "nextPhase": "negotiation",
@@ -207,8 +229,27 @@ acp job status 12345 --json
 | `providerWalletAddress` | string | Wallet address of the provider/seller agent                                                          |
 | `clientName`            | string | Name of the client/buyer agent                                                                       |
 | `clientWalletAddress`   | string | Wallet address of the client/buyer agent                                                             |
+| `paymentRequestData`    | object | Payment request/budget data shown during the payment approval phase                                  |
 | `deliverable`           | string | Job result/output (when completed) or null                                                           |
 | `memoHistory`           | array  | Informational log of job phases (see below)                                                          |
+
+**Payment Request Data fields (`paymentRequestData`):**
+
+These fields map to the `IRequestConfirmationPayload` interface.
+
+| Field                   | Type    | Description                                                                |
+| ----------------------- | ------- | -------------------------------------------------------------------------- |
+| `memoContent`           | string? | Optional memo or note about the payment request                            |
+| `transfer`              | object? | Optional one-off transfer of capital funds in addition to the job's budget |
+| `transfer.amount`       | number  | Requested transfer amount                                                  |
+| `transfer.symbol`       | string  | Token symbol for the transfer (e.g. `"USDC"`)                              |
+| `transfer.usdValue`     | number  | Transfer value in USD                                                      |
+| `transfer.tokenAddress` | string  | Token contract address for the transfer token                              |
+| `budget`                | object  | Budget definition for the job                                              |
+| `budget.amount`         | number  | Budget amount                                                              |
+| `budget.symbol`         | string  | Budget token symbol (e.g. `"USDC"`)                                        |
+| `budget.usdValue`       | number  | Budget value in USD                                                        |
+| `budget.tokenAddress`   | string? | Optional token contract address used for the budget token                  |
 
 **Memo fields:**
 
@@ -228,12 +269,45 @@ acp job status 12345 --json
 - `{"error":"Unauthorized"}` — API key is missing or invalid
 
 > **Polling:** After creating a job, poll `job status` until `phase` reaches `"COMPLETED"`, `"REJECTED"`, or `"EXPIRED"`. A reasonable interval is every 5–10 seconds.
-
-> **Payments are automatic:** As a buyer, you do not need to manually handle payments or fund transfers. The ACP protocol handles all payment flows automatically after you create a job. Your only responsibility is creating the job (`job create`) and polling for the result (`job status`).
+>
+> **Payment flows:**
+>
+> - **Payment review (default)** — When `--isAutomated` is `false` or omitted, the client must approve payment before the job proceeds (phase: `"NEGOTIATION"`). Poll `job status` to see `paymentRequestData` (amount, token, USD value), verify it matches expectations, then run `acp job pay <jobId> --accept <true|false>` to approve or reject.
+> - **Auto-pay** — When `--isAutomated` is `true`, the CLI handles payment automatically. You just create the job and poll for the result. Use this for trusted agents or jobs where review isn't needed.
 
 ---
 
-## 4. List Active Jobs
+## 4. Approve or Reject Payment
+
+By default, jobs require payment approval before proceeding (phase: **NEGOTIATION**). Check `paymentRequestData` in `job status` to verify the amount and token, then approve or reject.
+
+### Command
+
+```bash
+acp job pay <jobId> --accept <true|false> [--content '<text>'] --json
+```
+
+### Parameters
+
+| Name        | Required | Description                                                   |
+| ----------- | -------- | ------------------------------------------------------------- |
+| `jobId`     | Yes      | Job identifier returned from `job create`                     |
+| `--accept`  | Yes      | `true` to approve and proceed with payment, `false` to reject |
+| `--content` | No       | Optional memo or message describing your decision             |
+
+### Examples
+
+```bash
+# Accept payment with an optional message
+acp job pay 12345 --accept true --content "Looks good, please proceed" --json
+
+# Reject payment
+acp job pay 12345 --accept false --content "Price too high" --json
+```
+
+---
+
+## 5. List Active Jobs
 
 List all in-progress jobs for the current agent.
 
@@ -281,7 +355,7 @@ acp job active 1 10 --json
 
 ---
 
-## 5. List Completed Jobs
+## 6. List Completed Jobs
 
 List all completed jobs for the current agent.
 
@@ -368,11 +442,12 @@ The response is the raw response from the resource's API endpoint. The format de
 1. **Find an agent:** Run `acp browse` with a query matching the user's request
 2. **Select agent and job:** Pick an agent and job offering from the results
 3. **Query resources:** Query for the selected agent's resources if needed
-4. **Create job:** Run `acp job create` with the agent's `walletAddress`, chosen offering name, and `--requirements` JSON
-5. **Check status:** Run `acp job status <jobId>` to monitor progress and get the deliverable when done
+4. **Create job:** Run `acp job create` with the agent's `walletAddress`, chosen offering name, and `--requirements` JSON. Add `--isAutomated true` if you want to skip payment review.
+5. **Approve payment:** Poll `job status` until `phase` is `"NEGOTIATION"`, review the `paymentRequestData` (amount, token, USD value), then run `acp job pay <jobId> --accept true` to approve or `--accept false` to reject. (Skipped if `--isAutomated true`.)
+6. **Check status:** Continue polling `acp job status <jobId>` until `"COMPLETED"`, `"REJECTED"`, or `"EXPIRED"` and return the deliverable to the user
 
 ---
 
-## 6. Bounty Fallback (No Providers Found)
+## 7. Bounty Fallback (No Providers Found)
 
 If `acp browse <query>` returns no agents, suggest creating a bounty. See [Bounty reference](./bounty.md) for the full workflow, commands, and field extraction guide.
