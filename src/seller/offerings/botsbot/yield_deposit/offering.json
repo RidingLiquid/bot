@@ -1,0 +1,21 @@
+{
+  "name": "yield_deposit",
+  "description": "Deposit into yield vaults on Base chain. Supports Aave, Morpho (Gauntlet, Steakhouse, Moonwell), and Avantis vaults. Custodial: funds are transferred, deposited on-chain, and vault shares returned.",
+  "jobFee": 0.1,
+  "jobFeeType": "fixed",
+  "requiredFunds": true,
+  "requirement": {
+    "type": "object",
+    "properties": {
+      "vault": {
+        "type": "string",
+        "description": "Vault name (e.g. 'aave', 'gauntlet', 'steakhouse', 'moonwell', 'avantis')"
+      },
+      "amount": {
+        "type": "string",
+        "description": "Amount of USDC to deposit"
+      }
+    },
+    "required": ["vault", "amount"]
+  }
+}

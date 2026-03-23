@@ -1,0 +1,21 @@
+{
+  "name": "yield_withdraw",
+  "description": "Withdraw from yield vaults on Base chain. Supports Aave, Morpho (Gauntlet, Steakhouse, Moonwell), and Avantis vaults. Redeems vault shares and returns underlying USDC.",
+  "jobFee": 0.1,
+  "jobFeeType": "fixed",
+  "requiredFunds": false,
+  "requirement": {
+    "type": "object",
+    "properties": {
+      "vault": {
+        "type": "string",
+        "description": "Vault name (e.g. 'aave', 'gauntlet', 'steakhouse', 'moonwell', 'avantis')"
+      },
+      "amount": {
+        "type": "string",
+        "description": "Amount of vault shares to withdraw (or 'max' for full withdrawal)"
+      }
+    },
+    "required": ["vault", "amount"]
+  }
+}

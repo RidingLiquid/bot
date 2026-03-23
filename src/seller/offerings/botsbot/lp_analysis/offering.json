@@ -1,0 +1,25 @@
+{
+  "name": "lp_analysis",
+  "description": "LP position analytics for Aerodrome and Uniswap V3 on Base. Returns position value, fees earned, impermanent loss, and range efficiency for any LP NFT or pool position.",
+  "jobFee": 0.05,
+  "jobFeeType": "fixed",
+  "requiredFunds": false,
+  "requirement": {
+    "type": "object",
+    "properties": {
+      "poolAddress": {
+        "type": "string",
+        "description": "Pool contract address"
+      },
+      "walletAddress": {
+        "type": "string",
+        "description": "Wallet address holding LP position"
+      },
+      "token": {
+        "type": "string",
+        "description": "Token symbol or address to find LP opportunities"
+      }
+    },
+    "required": []
+  }
+}

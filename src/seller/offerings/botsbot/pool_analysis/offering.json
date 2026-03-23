@@ -1,0 +1,21 @@
+{
+  "name": "pool_analysis",
+  "description": "Comprehensive liquidity pool analysis on Base chain. Returns TVL, volume, fee APR, impermanent loss risk, pool composition, and historical performance for any DEX pool.",
+  "jobFee": 0.1,
+  "jobFeeType": "fixed",
+  "requiredFunds": false,
+  "requirement": {
+    "type": "object",
+    "properties": {
+      "poolAddress": {
+        "type": "string",
+        "description": "Pool contract address (0x...)"
+      },
+      "token": {
+        "type": "string",
+        "description": "Token symbol or address to find pools for"
+      }
+    },
+    "required": []
+  }
+}

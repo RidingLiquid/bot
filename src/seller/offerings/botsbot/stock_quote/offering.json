@@ -1,0 +1,17 @@
+{
+  "name": "stock_quote",
+  "description": "Get real-time stock price quote. Returns current price, change, volume, market cap, and key metrics for any US stock ticker.",
+  "jobFee": 0.02,
+  "jobFeeType": "fixed",
+  "requiredFunds": false,
+  "requirement": {
+    "type": "object",
+    "properties": {
+      "symbol": {
+        "type": "string",
+        "description": "Stock ticker symbol (e.g. 'AAPL', 'TSLA', 'NVDA')"
+      }
+    },
+    "required": ["symbol"]
+  }
+}

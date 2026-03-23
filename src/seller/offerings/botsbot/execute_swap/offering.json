@@ -1,0 +1,29 @@
+{
+  "name": "execute_swap",
+  "description": "Execute a trust-verified token swap on Base chain. Includes 10-point safety audit (honeypot, tax, pool quality, holder concentration) before execution. Custodial: tokens are transferred, swapped on-chain, and returned automatically.",
+  "jobFee": 0.1,
+  "jobFeeType": "fixed",
+  "requiredFunds": true,
+  "requirement": {
+    "type": "object",
+    "properties": {
+      "tokenIn": {
+        "type": "string",
+        "description": "Token to sell — symbol (USDC, WETH, ETH) or 0x address"
+      },
+      "tokenOut": {
+        "type": "string",
+        "description": "Token to buy — symbol or 0x address"
+      },
+      "amountIn": {
+        "type": "string",
+        "description": "Amount to sell in human-readable units (e.g. '10.5')"
+      },
+      "slippage": {
+        "type": "string",
+        "description": "Max slippage in percent (e.g. '1.0'). Optional — auto-detected."
+      }
+    },
+    "required": ["tokenIn", "tokenOut", "amountIn"]
+  }
+}

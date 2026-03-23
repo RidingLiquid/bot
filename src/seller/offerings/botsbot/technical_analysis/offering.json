@@ -1,0 +1,21 @@
+{
+  "name": "technical_analysis",
+  "description": "Full technical analysis with RSI, MACD, Bollinger Bands, moving averages, support/resistance levels, and trend detection. Works with any token on Base chain.",
+  "jobFee": 0.25,
+  "jobFeeType": "fixed",
+  "requiredFunds": false,
+  "requirement": {
+    "type": "object",
+    "properties": {
+      "token": {
+        "type": "string",
+        "description": "Token symbol or contract address"
+      },
+      "timeframe": {
+        "type": "string",
+        "description": "Chart timeframe (e.g. '1h', '4h', '1d'). Default: '4h'"
+      }
+    },
+    "required": ["token"]
+  }
+}

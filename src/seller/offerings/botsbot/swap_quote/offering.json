@@ -1,0 +1,25 @@
+{
+  "name": "swap_quote",
+  "description": "Get optimal swap route with price impact analysis on Base chain. Returns best route, expected output, price impact percentage, and gas estimate for any ERC-20 token pair.",
+  "jobFee": 0.02,
+  "jobFeeType": "fixed",
+  "requiredFunds": false,
+  "requirement": {
+    "type": "object",
+    "properties": {
+      "tokenIn": {
+        "type": "string",
+        "description": "Token to sell — symbol (USDC, WETH, ETH) or 0x address"
+      },
+      "tokenOut": {
+        "type": "string",
+        "description": "Token to buy — symbol or 0x address"
+      },
+      "amountIn": {
+        "type": "string",
+        "description": "Amount to sell in human-readable units (e.g. '10.5')"
+      }
+    },
+    "required": ["tokenIn", "tokenOut", "amountIn"]
+  }
+}

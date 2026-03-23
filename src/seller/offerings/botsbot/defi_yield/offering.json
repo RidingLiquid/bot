@@ -1,0 +1,25 @@
+{
+  "name": "defi_yield",
+  "description": "Discover yield opportunities across Base DeFi protocols. Returns APY, TVL, risk level, and deposit details for lending, liquidity pools, and vaults. Supports Aerodrome, Morpho, Aave, and more.",
+  "jobFee": 0.05,
+  "jobFeeType": "fixed",
+  "requiredFunds": false,
+  "requirement": {
+    "type": "object",
+    "properties": {
+      "token": {
+        "type": "string",
+        "description": "Token symbol or address to find yields for. Optional — omit for top yields across all tokens."
+      },
+      "riskTolerance": {
+        "type": "string",
+        "description": "Risk tolerance: 'low', 'medium', or 'high'. Default: 'medium'"
+      },
+      "amount": {
+        "type": "string",
+        "description": "Amount to deploy (for projected earnings). Optional."
+      }
+    },
+    "required": []
+  }
+}

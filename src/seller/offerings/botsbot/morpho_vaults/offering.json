@@ -1,0 +1,17 @@
+{
+  "name": "morpho_vaults",
+  "description": "Discover Morpho vault opportunities on Base. Returns vault APY, TVL, curator, underlying asset, and risk metrics for automated yield vaults.",
+  "jobFee": 0.02,
+  "jobFeeType": "fixed",
+  "requiredFunds": false,
+  "requirement": {
+    "type": "object",
+    "properties": {
+      "token": {
+        "type": "string",
+        "description": "Filter by underlying token (e.g. 'USDC', 'WETH'). Optional."
+      }
+    },
+    "required": []
+  }
+}
