@@ -17,12 +17,12 @@ export function requestAdditionalFunds(request: any): {
 }
 
 export async function executeJob(request: any): Promise<ExecuteJobResult> {
-  const data = await apiPost("/api/v1/swap", {
+  const data = await apiPost("/internal/execute-swap", {
     tokenIn: request.tokenIn,
     tokenOut: request.tokenOut,
     amountIn: request.amountIn,
-    slippage: request.slippage,
-    walletAddress: SWAP_WALLET,
+    slippage: request.slippage || "1",
+    recipientAddress: SWAP_WALLET,
   });
 
   if (!data.success) {
