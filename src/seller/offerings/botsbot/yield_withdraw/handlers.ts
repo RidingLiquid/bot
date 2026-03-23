@@ -5,10 +5,9 @@ const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 const VALID_VAULTS = ["aave", "gauntlet", "steakhouse", "moonwell", "avantis"];
 
 export async function executeJob(request: any): Promise<ExecuteJobResult> {
-  const data = await apiPost("/api/v1/yield-withdraw", {
+  const data = await apiPost("/internal/yield-withdraw", {
     vault: request.vault,
     amount: request.amount,
-    walletAddress: SWAP_WALLET,
   });
 
   if (!data.success) {

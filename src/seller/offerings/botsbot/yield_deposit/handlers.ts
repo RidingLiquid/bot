@@ -19,10 +19,9 @@ export function requestAdditionalFunds(request: any): {
 }
 
 export async function executeJob(request: any): Promise<ExecuteJobResult> {
-  const data = await apiPost("/api/v1/yield-deposit", {
+  const data = await apiPost("/internal/yield-deposit", {
     vault: request.vault,
     amount: request.amount,
-    walletAddress: SWAP_WALLET,
   });
 
   if (!data.success) {
